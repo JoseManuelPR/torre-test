@@ -100,7 +100,7 @@ export default function Home() {
     size: "5",
   });
   const [jobId, setJobId] = useState("PW9yY63W");
-  const [username, setUsername] = useState("renanpeixotox");
+  const [username, setUsername] = useState("josemanuelpr23");
 
   const [searchResponse, setSearchResponse] = useState<ApiResponse>({
     data: null,
@@ -306,7 +306,7 @@ export default function Home() {
                 value={username}
                 onChange={(e) => setUsername(e.target.value)}
                 className="w-full rounded-lg border border-[var(--card-border)] bg-[var(--input-bg)] px-4 py-3 text-[var(--foreground)] placeholder-[var(--muted)] outline-none transition-colors focus:border-[var(--accent)] focus:ring-1 focus:ring-[var(--accent)] sm:w-80"
-                placeholder="e.g., renanpeixotox"
+                placeholder="e.g., josemanuelpr23"
               />
             </div>
 

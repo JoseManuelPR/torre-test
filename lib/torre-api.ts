@@ -441,7 +441,7 @@ export const getJobDetails = (jobId: string) => torreApi.getJobDetails(jobId);
 /**
  * Get user genome/bio by username
  * @example
- * const genome = await getGenome("renanpeixotox");
+ * const genome = await getGenome("josemanuelpr23");
  */
 export const getGenome = (username: string) => torreApi.getGenome(username);
 

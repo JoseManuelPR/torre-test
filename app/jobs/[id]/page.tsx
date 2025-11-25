@@ -16,6 +16,7 @@ import {
   parseAIResponse,
   type CandidateFitAnalysisResult,
 } from "@/lib/prompts";
+import jsPDF from "jspdf";
 
 // Helper functions
 const formatType = (type: string): string => {
@@ -207,6 +208,273 @@ const getThemeColor = (theme: string): string => {
   return themeMap[theme] || "#cdff50";
 };
 
+// PDF Generation Function
+const generateAnalysisPDF = (
+  analysis: CandidateFitAnalysisResult,
+  genome: GenomeResponse,
+  job: JobDetails
+) => {
+  const pdf = new jsPDF();
+  const pageWidth = pdf.internal.pageSize.getWidth();
+  const pageHeight = pdf.internal.pageSize.getHeight();
+  const margin = 20;
+  const contentWidth = pageWidth - 2 * margin;
+  let y = margin;
+
+  const addNewPageIfNeeded = (requiredHeight: number) => {
+    if (y + requiredHeight > pageHeight - margin) {
+      pdf.addPage();
+      y = margin;
+      return true;
+    }
+    return false;
+  };
+
+  const addSectionTitle = (title: string) => {
+    addNewPageIfNeeded(20);
+    pdf.setFont("helvetica", "bold");
+    pdf.setFontSize(14);
+    pdf.setTextColor(80, 80, 80);
+    pdf.text(title, margin, y);
+    y += 8;
+  };
+
+  const addBulletList = (items: string[], bulletColor: number[]) => {
+    pdf.setFont("helvetica", "normal");
+    pdf.setFontSize(10);
+    pdf.setTextColor(60, 60, 60);
+
+    items.forEach((item) => {
+      const lines = pdf.splitTextToSize(item, contentWidth - 10);
+      const blockHeight = lines.length * 5 + 3;
+      addNewPageIfNeeded(blockHeight);
+
+      // Bullet point
+      pdf.setFillColor(bulletColor[0], bulletColor[1], bulletColor[2]);
+      pdf.circle(margin + 2, y - 1.5, 1.5, "F");
+
+      // Text
+      pdf.text(lines, margin + 8, y);
+      y += blockHeight;
+    });
+    y += 3;
+  };
+
+  const addParagraph = (text: string) => {
+    pdf.setFont("helvetica", "normal");
+    pdf.setFontSize(10);
+    pdf.setTextColor(60, 60, 60);
+    const lines = pdf.splitTextToSize(text, contentWidth);
+    const blockHeight = lines.length * 5 + 5;
+    addNewPageIfNeeded(blockHeight);
+    pdf.text(lines, margin, y);
+    y += blockHeight;
+  };
+
+  const addKeyValue = (label: string, value: string) => {
+    pdf.setFont("helvetica", "bold");
+    pdf.setFontSize(10);
+    pdf.setTextColor(100, 100, 100);
+    const labelLines = pdf.splitTextToSize(`${label}:`, 50);
+    pdf.text(labelLines, margin, y);
+
+    pdf.setFont("helvetica", "normal");
+    pdf.setTextColor(60, 60, 60);
+    const valueLines = pdf.splitTextToSize(value, contentWidth - 55);
+    pdf.text(valueLines, margin + 55, y);
+    y += Math.max(labelLines.length, valueLines.length) * 5 + 3;
+  };
+
+  // Header
+  pdf.setFillColor(245, 245, 250);
+  pdf.rect(0, 0, pageWidth, 45, "F");
+
+  pdf.setFont("helvetica", "bold");
+  pdf.setFontSize(20);
+  pdf.setTextColor(30, 30, 35);
+  pdf.text("Candidate Fit Analysis", margin, 20);
+
+  pdf.setFont("helvetica", "normal");
+  pdf.setFontSize(10);
+  pdf.setTextColor(100, 100, 100);
+  pdf.text(`Generated on ${new Date().toLocaleDateString("en-US", { year: "numeric", month: "long", day: "numeric" })}`, margin, 30);
+
+  y = 55;
+
+  // Candidate Info
+  pdf.setFillColor(250, 250, 255);
+  pdf.roundedRect(margin, y - 5, contentWidth, 25, 3, 3, "F");
+
+  pdf.setFont("helvetica", "bold");
+  pdf.setFontSize(12);
+  pdf.setTextColor(30, 30, 35);
+  pdf.text(genome.person.name || "Unknown Candidate", margin + 5, y + 5);
+
+  pdf.setFont("helvetica", "normal");
+  pdf.setFontSize(9);
+  pdf.setTextColor(100, 100, 100);
+  pdf.text(genome.person.professionalHeadline || "", margin + 5, y + 12);
+
+  y += 30;
+
+  // Job Info
+  pdf.setFont("helvetica", "bold");
+  pdf.setFontSize(10);
+  pdf.setTextColor(80, 80, 80);
+  pdf.text("Position:", margin, y);
+
+  pdf.setFont("helvetica", "normal");
+  pdf.setTextColor(30, 30, 35);
+  pdf.text(job.objective, margin + 25, y);
+  y += 6;
+
+  pdf.setFont("helvetica", "bold");
+  pdf.setTextColor(80, 80, 80);
+  pdf.text("Company:", margin, y);
+
+  pdf.setFont("helvetica", "normal");
+  pdf.setTextColor(30, 30, 35);
+  pdf.text(job.organizations?.[0]?.name || "Unknown", margin + 25, y);
+  y += 12;
+
+  // Overall Fit Score
+  if (analysis.overallFitScore) {
+    pdf.setFillColor(230, 245, 230);
+    pdf.roundedRect(margin, y - 5, contentWidth, 20, 3, 3, "F");
+
+    pdf.setFont("helvetica", "bold");
+    pdf.setFontSize(12);
+    pdf.setTextColor(30, 120, 30);
+    pdf.text(`Overall Fit Score: ${analysis.overallFitScore}`, margin + 5, y + 5);
+    y += 25;
+  }
+
+  // Job Summary
+  if (analysis.jobSummary) {
+    addSectionTitle("Job Summary");
+    addParagraph(String(analysis.jobSummary));
+    y += 5;
+  }
+
+  // Matching Skills
+  if (analysis.matchingSkillsAndStrengths && analysis.matchingSkillsAndStrengths.length > 0) {
+    addSectionTitle("Matching Skills & Strengths");
+    addBulletList(analysis.matchingSkillsAndStrengths, [76, 175, 80]); // Green
+  }
+
+  // Areas for Development
+  if (analysis.areasForDevelopment && analysis.areasForDevelopment.length > 0) {
+    addSectionTitle("Areas for Development");
+    addBulletList(analysis.areasForDevelopment, [255, 193, 7]); // Yellow
+  }
+
+  // Recommendations
+  if (analysis.recommendations && analysis.recommendations.length > 0) {
+    addSectionTitle("Recommendations");
+    addBulletList(analysis.recommendations, [66, 165, 245]); // Blue
+  }
+
+  // Career Trajectory
+  if (analysis.careerTrajectory) {
+    addSectionTitle("Career Trajectory & Growth");
+
+    if (analysis.careerTrajectory.summary) {
+      addParagraph(analysis.careerTrajectory.summary);
+    }
+
+    if (analysis.careerTrajectory.growthIndicators && analysis.careerTrajectory.growthIndicators.length > 0) {
+      pdf.setFont("helvetica", "bold");
+      pdf.setFontSize(11);
+      pdf.setTextColor(120, 80, 180);
+      addNewPageIfNeeded(10);
+      pdf.text("Growth Indicators:", margin, y);
+      y += 6;
+      addBulletList(analysis.careerTrajectory.growthIndicators, [156, 39, 176]); // Purple
+    }
+
+    if (analysis.careerTrajectory.alignmentWithRole) {
+      addNewPageIfNeeded(15);
+      addKeyValue("Role Alignment", analysis.careerTrajectory.alignmentWithRole);
+    }
+  }
+
+  // Location & Work Style
+  if (analysis.locationAndWorkStyle) {
+    addSectionTitle("Location & Work Style");
+
+    if (analysis.locationAndWorkStyle.locationCompatibility) {
+      addKeyValue("Location", analysis.locationAndWorkStyle.locationCompatibility);
+    }
+    if (analysis.locationAndWorkStyle.remoteWorkAlignment) {
+      addKeyValue("Remote Work", analysis.locationAndWorkStyle.remoteWorkAlignment);
+    }
+    if (analysis.locationAndWorkStyle.commitmentLevelMatch) {
+      addKeyValue("Commitment", analysis.locationAndWorkStyle.commitmentLevelMatch);
+    }
+
+    if (analysis.locationAndWorkStyle.potentialConcerns && analysis.locationAndWorkStyle.potentialConcerns.length > 0) {
+      y += 3;
+      pdf.setFont("helvetica", "bold");
+      pdf.setFontSize(11);
+      pdf.setTextColor(255, 152, 0);
+      addNewPageIfNeeded(10);
+      pdf.text("Potential Concerns:", margin, y);
+      y += 6;
+      addBulletList(analysis.locationAndWorkStyle.potentialConcerns, [255, 152, 0]); // Orange
+    }
+  }
+
+  // Professional Credibility
+  if (analysis.professionalCredibility) {
+    addSectionTitle("Professional Credibility");
+
+    if (analysis.professionalCredibility.profileQuality) {
+      addKeyValue("Profile Quality", analysis.professionalCredibility.profileQuality);
+    }
+
+    if (analysis.professionalCredibility.professionalPresence && analysis.professionalCredibility.professionalPresence.length > 0) {
+      y += 3;
+      pdf.setFont("helvetica", "bold");
+      pdf.setFontSize(11);
+      pdf.setTextColor(0, 150, 136);
+      addNewPageIfNeeded(10);
+      pdf.text("Professional Presence:", margin, y);
+      y += 6;
+      addBulletList(analysis.professionalCredibility.professionalPresence, [0, 150, 136]); // Teal
+    }
+
+    if (analysis.professionalCredibility.credibilityIndicators && analysis.professionalCredibility.credibilityIndicators.length > 0) {
+      y += 3;
+      pdf.setFont("helvetica", "bold");
+      pdf.setFontSize(11);
+      pdf.setTextColor(0, 150, 136);
+      addNewPageIfNeeded(10);
+      pdf.text("Credibility Indicators:", margin, y);
+      y += 6;
+      addBulletList(analysis.professionalCredibility.credibilityIndicators, [0, 150, 136]); // Teal
+    }
+  }
+
+  // Footer
+  const totalPages = pdf.internal.pages.length - 1;
+  for (let i = 1; i <= totalPages; i++) {
+    pdf.setPage(i);
+    pdf.setFont("helvetica", "normal");
+    pdf.setFontSize(8);
+    pdf.setTextColor(150, 150, 150);
+    pdf.text(
+      `Page ${i} of ${totalPages} • Torre Candidate Fit Analysis`,
+      pageWidth / 2,
+      pageHeight - 10,
+      { align: "center" }
+    );
+  }
+
+  // Download
+  const fileName = `Candidate_Fit_${genome.person.name?.replace(/\s+/g, "_") || "Unknown"}_${job.objective.replace(/\s+/g, "_").substring(0, 30)}.pdf`;
+  pdf.save(fileName);
+};
+
 // Candidate Fit Dialog Component
 interface FitAnalysisDialogProps {
   isOpen: boolean;
@@ -342,7 +610,7 @@ function FitAnalysisDialog({ isOpen, onClose, job, themeColor }: FitAnalysisDial
                     onChange={(e) => setUsername(e.target.value)}
                     onKeyDown={(e) => e.key === "Enter" && handleAnalyze()}
                     className="flex-1 rounded-xl border border-[var(--card-border)] bg-[var(--input-bg)] px-4 py-3 text-[var(--foreground)] placeholder-[var(--muted)] outline-none transition-colors focus:border-[var(--accent)] focus:ring-1 focus:ring-[var(--accent)]"
-                    placeholder="e.g., renanpeixotox"
+                    placeholder="e.g., josemanuelpr23"
                     autoFocus
                   />
                   <button
@@ -754,7 +1022,20 @@ function FitAnalysisDialog({ isOpen, onClose, job, themeColor }: FitAnalysisDial
               )}
 
               {/* Actions */}
-              <div className="flex justify-end gap-3">
+              <div className="flex flex-wrap justify-end gap-3">
+                <button
+                  onClick={() => generateAnalysisPDF(analysis, genome, job)}
+                  className="flex items-center gap-2 rounded-xl px-6 py-3 font-semibold transition-all hover:opacity-90"
+                  style={{ 
+                    backgroundColor: themeColor,
+                    color: "#0f0f12",
+                  }}
+                >
+                  <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                  </svg>
+                  Download PDF
+                </button>
                 <button
                   onClick={() => {
                     setStep("input");
