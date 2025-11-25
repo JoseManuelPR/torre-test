@@ -62,7 +62,7 @@ const ResponsePanel = ({ response, title }: { response: ApiResponse; title: stri
         </div>
       </div>
     )}
-    {response.data && (
+    {typeof response.data !== "undefined" && response.data !== null && (
       <div className="animate-fade-in rounded-xl border border-[var(--card-border)] bg-[var(--card-bg)] overflow-hidden">
         <div className="flex items-center justify-between border-b border-[var(--card-border)] bg-[var(--input-bg)] px-4 py-3">
           <div className="flex items-center gap-2">
@@ -84,7 +84,9 @@ const ResponsePanel = ({ response, title }: { response: ApiResponse; title: stri
         <pre className="max-h-96 overflow-auto p-4 text-sm leading-relaxed">
           <code
             dangerouslySetInnerHTML={{
-              __html: syntaxHighlight(JSON.stringify(response.data, null, 2)),
+              __html: syntaxHighlight(
+                JSON.stringify(response.data, null, 2)
+              ),
             }}
           />
         </pre>
