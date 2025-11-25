@@ -44,10 +44,10 @@ const syntaxHighlight = (json: string): string => {
 const ResponsePanel = ({ response, title }: { response: ApiResponse; title: string }) => (
   <div className="mt-4">
     {response.loading && (
-      <div className="rounded-xl border border-[--card-border] bg-[--card-bg] p-6">
+      <div className="rounded-xl border border-[var(--card-border)] bg-[var(--card-bg)] p-6">
         <div className="flex items-center gap-3">
-          <div className="h-5 w-5 animate-spin rounded-full border-2 border-[--accent] border-t-transparent" />
-          <span className="text-[--muted]">Fetching {title}...</span>
+          <div className="h-5 w-5 animate-spin rounded-full border-2 border-[var(--accent)] border-t-transparent" />
+          <span className="text-[var(--muted)]">Fetching {title}...</span>
         </div>
       </div>
     )}
@@ -63,15 +63,15 @@ const ResponsePanel = ({ response, title }: { response: ApiResponse; title: stri
       </div>
     )}
     {response.data && (
-      <div className="animate-fade-in rounded-xl border border-[--card-border] bg-[--card-bg] overflow-hidden">
-        <div className="flex items-center justify-between border-b border-[--card-border] bg-[--input-bg] px-4 py-3">
+      <div className="animate-fade-in rounded-xl border border-[var(--card-border)] bg-[var(--card-bg)] overflow-hidden">
+        <div className="flex items-center justify-between border-b border-[var(--card-border)] bg-[var(--input-bg)] px-4 py-3">
           <div className="flex items-center gap-2">
             <div className="flex gap-1.5">
               <div className="h-3 w-3 rounded-full bg-red-500/80" />
               <div className="h-3 w-3 rounded-full bg-yellow-500/80" />
               <div className="h-3 w-3 rounded-full bg-green-500/80" />
             </div>
-            <span className="ml-2 text-sm text-[--muted]">Response</span>
+            <span className="ml-2 text-sm text-[var(--muted)]">Response</span>
           </div>
           <span className={`rounded-full px-3 py-1 text-xs font-medium ${
             response.status >= 200 && response.status < 300
@@ -173,33 +173,33 @@ export default function Home() {
   };
 
   return (
-    <div className="min-h-screen bg-[--background] px-4 py-12 sm:px-6 lg:px-8">
+    <div className="min-h-screen bg-[var(--background)] px-4 py-12 sm:px-6 lg:px-8">
       <div className="mx-auto max-w-4xl">
         {/* Header */}
         <div className="mb-12 text-center">
-          <div className="mb-4 inline-flex items-center gap-2 rounded-full border border-[--accent]/30 bg-[--accent]/10 px-4 py-2">
-            <div className="h-2 w-2 rounded-full bg-[--accent] animate-pulse" />
-            <span className="text-sm font-medium text-[--accent]">API Testing Suite</span>
+          <div className="mb-4 inline-flex items-center gap-2 rounded-full border border-[var(--accent)]/30 bg-[var(--accent)]/10 px-4 py-2">
+            <div className="h-2 w-2 rounded-full bg-[var(--accent)] animate-pulse" />
+            <span className="text-sm font-medium text-[var(--accent)]">API Testing Suite</span>
           </div>
           <h1 className="mb-4 text-4xl font-bold tracking-tight sm:text-5xl">
-            <span className="text-[--foreground]">Torre</span>
-            <span className="text-[--accent]">.co</span>
-            <span className="text-[--foreground]"> APIs</span>
+            <span className="text-[var(--foreground)]">Torre</span>
+            <span className="text-[var(--accent)]">.co</span>
+            <span className="text-[var(--foreground)]"> APIs</span>
           </h1>
-          <p className="text-lg text-[--muted]">
+          <p className="text-lg text-[var(--muted)]">
             Test and explore Torre&apos;s public API endpoints
           </p>
         </div>
 
         <div className="space-y-8">
           {/* API 1: Search Opportunities */}
-          <section className="rounded-2xl border border-[--card-border] bg-[--card-bg] p-6 transition-all hover:border-[--accent]/30">
+          <section className="rounded-2xl border border-[var(--card-border)] bg-[var(--card-bg)] p-6 transition-all hover:border-[var(--accent)]/30">
             <div className="mb-6">
               <div className="flex items-center gap-3 mb-2">
-                <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-[--accent]/20 text-sm font-bold text-[--accent]">1</span>
+                <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-[var(--accent)]/20 text-sm font-bold text-[var(--accent)]">1</span>
                 <h2 className="text-xl font-semibold">Search Opportunities</h2>
               </div>
-              <div className="flex items-center gap-2 text-sm text-[--muted]">
+              <div className="flex items-center gap-2 text-sm text-[var(--muted)]">
                 <span className="rounded bg-blue-500/20 px-2 py-0.5 font-mono text-blue-400">POST</span>
                 <code className="text-xs">search.torre.co/opportunities/_search</code>
               </div>
@@ -207,22 +207,22 @@ export default function Home() {
 
             <div className="mb-4 grid gap-4 sm:grid-cols-2">
               <div>
-                <label className="mb-2 block text-sm font-medium text-[--muted]">Keyword</label>
+                <label className="mb-2 block text-sm font-medium text-[var(--muted)]">Keyword</label>
                 <input
                   type="text"
                   value={searchParams.keyword}
                   onChange={(e) => setSearchParams({ ...searchParams, keyword: e.target.value })}
-                  className="w-full rounded-lg border border-[--card-border] bg-[--input-bg] px-4 py-3 text-[--foreground] placeholder-[--muted] outline-none transition-colors focus:border-[--accent] focus:ring-1 focus:ring-[--accent]"
+                  className="w-full rounded-lg border border-[var(--card-border)] bg-[var(--input-bg)] px-4 py-3 text-[var(--foreground)] placeholder-[var(--muted)] outline-none transition-colors focus:border-[var(--accent)] focus:ring-1 focus:ring-[var(--accent)]"
                   placeholder="e.g., Designer, Engineer"
                 />
               </div>
               <div>
-                <label className="mb-2 block text-sm font-medium text-[--muted]">Results Size</label>
+                <label className="mb-2 block text-sm font-medium text-[var(--muted)]">Results Size</label>
                 <input
                   type="number"
                   value={searchParams.size}
                   onChange={(e) => setSearchParams({ ...searchParams, size: e.target.value })}
-                  className="w-full rounded-lg border border-[--card-border] bg-[--input-bg] px-4 py-3 text-[--foreground] placeholder-[--muted] outline-none transition-colors focus:border-[--accent] focus:ring-1 focus:ring-[--accent]"
+                  className="w-full rounded-lg border border-[var(--card-border)] bg-[var(--input-bg)] px-4 py-3 text-[var(--foreground)] placeholder-[var(--muted)] outline-none transition-colors focus:border-[var(--accent)] focus:ring-1 focus:ring-[var(--accent)]"
                   placeholder="5"
                   min="1"
                   max="50"
@@ -233,7 +233,7 @@ export default function Home() {
             <button
               onClick={searchOpportunities}
               disabled={searchResponse.loading}
-              className="group relative w-full overflow-hidden rounded-xl bg-[--accent] px-6 py-4 font-semibold text-[--background] transition-all hover:bg-[--accent-dark] disabled:cursor-not-allowed disabled:opacity-50 sm:w-auto"
+              className="group relative w-full overflow-hidden rounded-xl bg-[var(--accent)] px-6 py-4 font-semibold text-[var(--background)] transition-all hover:bg-[var(--accent-dark)] disabled:cursor-not-allowed disabled:opacity-50 sm:w-auto"
             >
               <span className="relative z-10 flex items-center justify-center gap-2">
                 <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -247,25 +247,25 @@ export default function Home() {
           </section>
 
           {/* API 2: Job Details */}
-          <section className="rounded-2xl border border-[--card-border] bg-[--card-bg] p-6 transition-all hover:border-[--accent]/30">
+          <section className="rounded-2xl border border-[var(--card-border)] bg-[var(--card-bg)] p-6 transition-all hover:border-[var(--accent)]/30">
             <div className="mb-6">
               <div className="flex items-center gap-3 mb-2">
-                <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-[--accent]/20 text-sm font-bold text-[--accent]">2</span>
+                <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-[var(--accent)]/20 text-sm font-bold text-[var(--accent)]">2</span>
                 <h2 className="text-xl font-semibold">Get Job Details</h2>
               </div>
-              <div className="flex items-center gap-2 text-sm text-[--muted]">
+              <div className="flex items-center gap-2 text-sm text-[var(--muted)]">
                 <span className="rounded bg-emerald-500/20 px-2 py-0.5 font-mono text-emerald-400">GET</span>
                 <code className="text-xs">torre.ai/api/suite/opportunities/&#123;job-id&#125;</code>
               </div>
             </div>
 
             <div className="mb-4">
-              <label className="mb-2 block text-sm font-medium text-[--muted]">Job ID</label>
+              <label className="mb-2 block text-sm font-medium text-[var(--muted)]">Job ID</label>
               <input
                 type="text"
                 value={jobId}
                 onChange={(e) => setJobId(e.target.value)}
-                className="w-full rounded-lg border border-[--card-border] bg-[--input-bg] px-4 py-3 text-[--foreground] placeholder-[--muted] outline-none transition-colors focus:border-[--accent] focus:ring-1 focus:ring-[--accent] sm:w-80"
+                className="w-full rounded-lg border border-[var(--card-border)] bg-[var(--input-bg)] px-4 py-3 text-[var(--foreground)] placeholder-[var(--muted)] outline-none transition-colors focus:border-[var(--accent)] focus:ring-1 focus:ring-[var(--accent)] sm:w-80"
                 placeholder="e.g., PW9yY63W"
               />
             </div>
@@ -273,7 +273,7 @@ export default function Home() {
             <button
               onClick={getJobDetails}
               disabled={jobResponse.loading}
-              className="group relative w-full overflow-hidden rounded-xl bg-[--accent] px-6 py-4 font-semibold text-[--background] transition-all hover:bg-[--accent-dark] disabled:cursor-not-allowed disabled:opacity-50 sm:w-auto"
+              className="group relative w-full overflow-hidden rounded-xl bg-[var(--accent)] px-6 py-4 font-semibold text-[var(--background)] transition-all hover:bg-[var(--accent-dark)] disabled:cursor-not-allowed disabled:opacity-50 sm:w-auto"
             >
               <span className="relative z-10 flex items-center justify-center gap-2">
                 <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -287,25 +287,25 @@ export default function Home() {
           </section>
 
           {/* API 3: User Genome */}
-          <section className="rounded-2xl border border-[--card-border] bg-[--card-bg] p-6 transition-all hover:border-[--accent]/30">
+          <section className="rounded-2xl border border-[var(--card-border)] bg-[var(--card-bg)] p-6 transition-all hover:border-[var(--accent)]/30">
             <div className="mb-6">
               <div className="flex items-center gap-3 mb-2">
-                <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-[--accent]/20 text-sm font-bold text-[--accent]">3</span>
+                <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-[var(--accent)]/20 text-sm font-bold text-[var(--accent)]">3</span>
                 <h2 className="text-xl font-semibold">Get User Genome</h2>
               </div>
-              <div className="flex items-center gap-2 text-sm text-[--muted]">
+              <div className="flex items-center gap-2 text-sm text-[var(--muted)]">
                 <span className="rounded bg-emerald-500/20 px-2 py-0.5 font-mono text-emerald-400">GET</span>
                 <code className="text-xs">torre.ai/api/genome/bios/&#123;username&#125;</code>
               </div>
             </div>
 
             <div className="mb-4">
-              <label className="mb-2 block text-sm font-medium text-[--muted]">Username</label>
+              <label className="mb-2 block text-sm font-medium text-[var(--muted)]">Username</label>
               <input
                 type="text"
                 value={username}
                 onChange={(e) => setUsername(e.target.value)}
-                className="w-full rounded-lg border border-[--card-border] bg-[--input-bg] px-4 py-3 text-[--foreground] placeholder-[--muted] outline-none transition-colors focus:border-[--accent] focus:ring-1 focus:ring-[--accent] sm:w-80"
+                className="w-full rounded-lg border border-[var(--card-border)] bg-[var(--input-bg)] px-4 py-3 text-[var(--foreground)] placeholder-[var(--muted)] outline-none transition-colors focus:border-[var(--accent)] focus:ring-1 focus:ring-[var(--accent)] sm:w-80"
                 placeholder="e.g., renanpeixotox"
               />
             </div>
@@ -313,7 +313,7 @@ export default function Home() {
             <button
               onClick={getGenome}
               disabled={genomeResponse.loading}
-              className="group relative w-full overflow-hidden rounded-xl bg-[--accent] px-6 py-4 font-semibold text-[--background] transition-all hover:bg-[--accent-dark] disabled:cursor-not-allowed disabled:opacity-50 sm:w-auto"
+              className="group relative w-full overflow-hidden rounded-xl bg-[var(--accent)] px-6 py-4 font-semibold text-[var(--background)] transition-all hover:bg-[var(--accent-dark)] disabled:cursor-not-allowed disabled:opacity-50 sm:w-auto"
             >
               <span className="relative z-10 flex items-center justify-center gap-2">
                 <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -328,7 +328,7 @@ export default function Home() {
         </div>
 
         {/* Footer */}
-        <footer className="mt-12 text-center text-sm text-[--muted]">
+        <footer className="mt-12 text-center text-sm text-[var(--muted)]">
           <p>Built for testing Torre.co public APIs</p>
         </footer>
       </div>

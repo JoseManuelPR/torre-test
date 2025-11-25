@@ -85,3 +85,117 @@ body {
 .json-number { color: #fbbf24; }
 .json-boolean { color: #f472b6; }
 .json-null { color: #a78bfa; }
+
+/* Prose styles for job descriptions */
+.prose {
+  line-height: 1.75;
+}
+
+.prose p {
+  margin-bottom: 1rem;
+}
+
+.prose ul,
+.prose ol {
+  margin-top: 1rem;
+  margin-bottom: 1rem;
+  padding-left: 1.75rem;
+  display: block;
+}
+
+.prose ul {
+  list-style-type: disc !important;
+  list-style-position: outside;
+}
+
+.prose ol {
+  list-style-type: decimal !important;
+  list-style-position: outside;
+}
+
+.prose li {
+  display: list-item !important;
+  margin-bottom: 0.625rem;
+  padding-left: 0.25rem;
+  line-height: 1.6;
+}
+
+.prose li::marker {
+  color: var(--accent);
+}
+
+.prose ul li::marker {
+  font-size: 0.875em;
+}
+
+.prose h1,
+.prose h2,
+.prose h3,
+.prose h4,
+.prose h5,
+.prose h6 {
+  font-weight: 600;
+  margin-top: 1.5rem;
+  margin-bottom: 0.75rem;
+  color: var(--foreground);
+}
+
+.prose h1 { font-size: 1.875rem; }
+.prose h2 { font-size: 1.5rem; }
+.prose h3 { font-size: 1.25rem; }
+.prose h4 { font-size: 1.125rem; }
+
+.prose strong,
+.prose b {
+  font-weight: 600;
+  color: var(--foreground);
+}
+
+.prose a {
+  color: var(--accent);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.prose a:hover {
+  opacity: 0.8;
+}
+
+.prose blockquote {
+  border-left: 3px solid var(--accent);
+  padding-left: 1rem;
+  margin: 1rem 0;
+  font-style: italic;
+  color: var(--muted);
+}
+
+.prose code {
+  background: var(--input-bg);
+  padding: 0.125rem 0.375rem;
+  border-radius: 0.25rem;
+  font-size: 0.875em;
+}
+
+.prose pre {
+  background: var(--input-bg);
+  padding: 1rem;
+  border-radius: 0.5rem;
+  overflow-x: auto;
+  margin: 1rem 0;
+}
+
+.prose hr {
+  border-color: var(--card-border);
+  margin: 2rem 0;
+}
+
+/* Search button - matches View Position style */
+.search-button {
+  background-color: rgba(205, 255, 80, 0.2);
+  color: var(--accent);
+}
+
+.search-button:hover:not(:disabled) {
+  background-color: var(--accent);
+  color: var(--background);
+}

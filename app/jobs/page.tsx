@@ -95,7 +95,7 @@ const JobCard = ({ job }: { job: JobResult }) => {
 
   return (
     <div 
-      className="group relative flex h-full flex-col rounded-2xl border border-[--card-border] bg-[--card-bg] p-6 transition-all duration-300 hover:border-transparent hover:shadow-xl"
+      className="group relative flex h-full flex-col rounded-2xl border border-[var(--card-border)] bg-[var(--card-bg)] p-6 transition-all duration-300 hover:border-transparent hover:shadow-xl"
       style={{ 
         "--hover-glow": themeColor,
         boxShadow: "0 0 0 0 transparent",
@@ -131,7 +131,7 @@ const JobCard = ({ job }: { job: JobResult }) => {
             </div>
           )}
           <div>
-            <p className="text-sm text-[--muted]">{org?.name || "Unknown Company"}</p>
+            <p className="text-sm text-[var(--muted)]">{org?.name || "Unknown Company"}</p>
             <div className="flex items-center gap-2 mt-1">
               <span 
                 className="rounded-full px-2 py-0.5 text-xs font-medium"
@@ -160,23 +160,23 @@ const JobCard = ({ job }: { job: JobResult }) => {
 
       {/* Title */}
       <h3 
-        className="mb-2 text-xl font-semibold transition-colors group-hover:text-[--accent]"
+        className="mb-2 text-xl font-semibold transition-colors group-hover:text-[var(--accent)]"
         style={{ color: "var(--foreground)" }}
       >
         {job.objective}
       </h3>
 
       {/* Tagline */}
-      <p className="mb-4 line-clamp-2 text-sm text-[--muted]">
+      <p className="mb-4 line-clamp-2 text-sm text-[var(--muted)]">
         {job.tagline}
       </p>
 
       {/* Compensation */}
       <div className="mb-4 flex items-center gap-2">
-        <svg className="h-5 w-5 text-[--accent]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <svg className="h-5 w-5 text-[var(--accent)]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
         </svg>
-        <span className={`font-semibold ${compensation === "Compensation not provided" ? "text-[--muted] italic" : "text-[--foreground]"}`}>
+        <span className={`font-semibold ${compensation === "Compensation not provided" ? "text-[var(--muted)] italic" : "text-[var(--foreground)]"}`}>
           {compensation}
         </span>
       </div>
@@ -188,13 +188,13 @@ const JobCard = ({ job }: { job: JobResult }) => {
             {job.locations.slice(0, 5).map((location, idx) => (
               <span 
                 key={idx}
-                className="rounded-lg bg-[--input-bg] px-2 py-1 text-xs text-[--muted]"
+                className="rounded-lg bg-[var(--input-bg)] px-2 py-1 text-xs text-[var(--muted)]"
               >
                 {location}
               </span>
             ))}
             {job.locations.length > 5 && (
-              <span className="rounded-lg bg-[--input-bg] px-2 py-1 text-xs text-[--muted]">
+              <span className="rounded-lg bg-[var(--input-bg)] px-2 py-1 text-xs text-[var(--muted)]">
                 +{job.locations.length - 5} more
               </span>
             )}
@@ -204,7 +204,7 @@ const JobCard = ({ job }: { job: JobResult }) => {
 
       {/* Timezones */}
       {job.timezones && job.timezones.length > 0 && (
-        <div className="mb-4 flex items-center gap-2 text-sm text-[--muted]">
+        <div className="mb-4 flex items-center gap-2 text-sm text-[var(--muted)]">
           <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
           </svg>
@@ -229,19 +229,19 @@ const JobCard = ({ job }: { job: JobResult }) => {
       {/* Skills */}
       {job.skills && job.skills.length > 0 && (
         <div className="mb-4">
-          <p className="mb-2 text-xs font-medium uppercase tracking-wider text-[--muted]">Skills</p>
+          <p className="mb-2 text-xs font-medium uppercase tracking-wider text-[var(--muted)]">Skills</p>
           <div className="flex flex-wrap gap-1.5">
             {job.skills.slice(0, 6).map((skill, idx) => (
               <span 
                 key={idx}
-                className="rounded-lg border border-[--card-border] bg-[--input-bg] px-2 py-1 text-xs"
+                className="rounded-lg border border-[var(--card-border)] bg-[var(--input-bg)] px-2 py-1 text-xs"
               >
-                <span className="text-[--foreground]">{skill.name}</span>
-                <span className="text-[--muted]"> · {formatProficiency(skill.proficiency)}</span>
+                <span className="text-[var(--foreground)]">{skill.name}</span>
+                <span className="text-[var(--muted)]"> · {formatProficiency(skill.proficiency)}</span>
               </span>
             ))}
             {job.skills.length > 6 && (
-              <span className="rounded-lg bg-[--input-bg] px-2 py-1 text-xs text-[--muted]">
+              <span className="rounded-lg bg-[var(--input-bg)] px-2 py-1 text-xs text-[var(--muted)]">
                 +{job.skills.length - 6} more
               </span>
             )}
@@ -252,7 +252,7 @@ const JobCard = ({ job }: { job: JobResult }) => {
       {/* Additional Compensation */}
       {job.additionalCompensation && job.additionalCompensation.length > 0 && (
         <div className="mb-4">
-          <p className="mb-2 text-xs font-medium uppercase tracking-wider text-[--muted]">Benefits</p>
+          <p className="mb-2 text-xs font-medium uppercase tracking-wider text-[var(--muted)]">Benefits</p>
           <div className="flex flex-wrap gap-1.5">
             {job.additionalCompensation.map((comp, idx) => (
               <span 
@@ -331,13 +331,13 @@ export default function JobsPage() {
   }, [searchJobs]);
 
   return (
-    <div className="min-h-screen bg-[--background] px-4 py-12 sm:px-6 lg:px-8">
+    <div className="min-h-screen bg-[var(--background)] px-4 py-12 sm:px-6 lg:px-8">
       <div className="mx-auto max-w-7xl">
         {/* Header */}
         <div className="mb-8 text-center">
           <Link 
             href="/"
-            className="mb-4 inline-flex items-center gap-2 text-sm text-[--muted] transition-colors hover:text-[--foreground]"
+            className="mb-4 inline-flex items-center gap-2 text-sm text-[var(--muted)] transition-colors hover:text-[var(--foreground)]"
           >
             <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" />
@@ -345,10 +345,10 @@ export default function JobsPage() {
             Back to API Tester
           </Link>
           <h1 className="mb-4 text-4xl font-bold tracking-tight sm:text-5xl">
-            <span className="text-[--foreground]">Find Your Next</span>
-            <span className="text-[--accent]"> Opportunity</span>
+            <span className="text-[var(--foreground)]">Find Your Next</span>
+            <span className="text-[var(--accent)]"> Opportunity</span>
           </h1>
-          <p className="text-lg text-[--muted]">
+          <p className="text-lg text-[var(--muted)]">
             Discover {total.toLocaleString()} open positions matching your search
           </p>
         </div>
@@ -356,9 +356,9 @@ export default function JobsPage() {
         {/* Search Bar */}
         <div className="mb-10 flex flex-col gap-4 sm:flex-row sm:items-end">
           <div className="flex-1">
-            <label className="mb-2 block text-sm font-medium text-[--muted]">Search Jobs</label>
+            <label className="mb-2 block text-sm font-medium text-[var(--muted)]">Search Jobs</label>
             <div className="relative">
-              <svg className="absolute left-4 top-1/2 h-5 w-5 -translate-y-1/2 text-[--muted]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <svg className="absolute left-4 top-1/2 h-5 w-5 -translate-y-1/2 text-[var(--muted)]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
               </svg>
               <input
@@ -366,17 +366,17 @@ export default function JobsPage() {
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
                 onKeyDown={(e) => e.key === "Enter" && searchJobs()}
-                className="w-full rounded-xl border border-[--card-border] bg-[--card-bg] py-4 pl-12 pr-4 text-[--foreground] placeholder-[--muted] outline-none transition-colors focus:border-[--accent] focus:ring-1 focus:ring-[--accent]"
+                className="w-full rounded-xl border border-[var(--card-border)] bg-[var(--card-bg)] py-4 pl-12 pr-4 text-[var(--foreground)] placeholder-[var(--muted)] outline-none transition-colors focus:border-[var(--accent)] focus:ring-1 focus:ring-[var(--accent)]"
                 placeholder="Search by keyword (e.g., Designer, Engineer, Marketing)"
               />
             </div>
           </div>
           <div className="w-full sm:w-32">
-            <label className="mb-2 block text-sm font-medium text-[--muted]">Results</label>
+            <label className="mb-2 block text-sm font-medium text-[var(--muted)]">Results</label>
             <select
               value={size}
               onChange={(e) => setSize(Number(e.target.value))}
-              className="w-full rounded-xl border border-[--card-border] bg-[--card-bg] px-4 py-4 text-[--foreground] outline-none transition-colors focus:border-[--accent] focus:ring-1 focus:ring-[--accent]"
+              className="w-full rounded-xl border border-[var(--card-border)] bg-[var(--card-bg)] px-4 py-4 text-[var(--foreground)] outline-none transition-colors focus:border-[var(--accent)] focus:ring-1 focus:ring-[var(--accent)]"
             >
               <option value={6}>6</option>
               <option value={12}>12</option>
@@ -387,11 +387,11 @@ export default function JobsPage() {
           <button
             onClick={searchJobs}
             disabled={loading}
-            className="flex items-center justify-center gap-2 rounded-xl bg-[--accent] px-8 py-4 font-semibold text-white transition-all hover:bg-[--accent-dark] disabled:cursor-not-allowed disabled:opacity-50"
+            className="search-button flex items-center justify-center gap-2 rounded-xl px-8 py-4 font-semibold transition-all disabled:cursor-not-allowed disabled:opacity-50"
           >
             {loading ? (
               <>
-                <div className="h-5 w-5 animate-spin rounded-full border-2 border-[--background] border-t-transparent" />
+                <div className="h-5 w-5 animate-spin rounded-full border-2 border-[var(--background)] border-t-transparent" />
                 Searching...
               </>
             ) : (
@@ -421,7 +421,7 @@ export default function JobsPage() {
         {loading && (
           <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
             {Array.from({ length: size }).map((_, i) => (
-              <div key={i} className="rounded-2xl border border-[--card-border] bg-[--card-bg] p-6">
+              <div key={i} className="rounded-2xl border border-[var(--card-border)] bg-[var(--card-bg)] p-6">
                 <div className="mb-4 flex items-center gap-3">
                   <div className="h-12 w-12 rounded-xl loading-shimmer" />
                   <div className="flex-1">
@@ -453,17 +453,17 @@ export default function JobsPage() {
 
         {/* Empty State */}
         {!loading && !error && results.length === 0 && (
-          <div className="rounded-2xl border border-[--card-border] bg-[--card-bg] p-12 text-center">
-            <svg className="mx-auto mb-4 h-16 w-16 text-[--muted]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <div className="rounded-2xl border border-[var(--card-border)] bg-[var(--card-bg)] p-12 text-center">
+            <svg className="mx-auto mb-4 h-16 w-16 text-[var(--muted)]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
             </svg>
-            <h3 className="mb-2 text-xl font-semibold text-[--foreground]">No jobs found</h3>
-            <p className="text-[--muted]">Try adjusting your search term or filters</p>
+            <h3 className="mb-2 text-xl font-semibold text-[var(--foreground)]">No jobs found</h3>
+            <p className="text-[var(--muted)]">Try adjusting your search term or filters</p>
           </div>
         )}
 
         {/* Footer */}
-        <footer className="mt-12 text-center text-sm text-[--muted]">
+        <footer className="mt-12 text-center text-sm text-[var(--muted)]">
           <p>Powered by Torre.co API</p>
         </footer>
       </div>

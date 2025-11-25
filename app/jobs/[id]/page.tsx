@@ -9,6 +9,13 @@ import {
   type JobDetails,
   type GenomeResponse,
 } from "@/lib/torre-api";
+import {
+  generateCandidateFitPrompt,
+  CANDIDATE_FIT_SYSTEM_PROMPT,
+  getFitScoreColor,
+  parseAIResponse,
+  type CandidateFitAnalysisResult,
+} from "@/lib/prompts";
 
 // Helper functions
 const formatType = (type: string): string => {
@@ -89,6 +96,81 @@ const formatAgreement = (agreement: JobDetails["agreement"]): string => {
   return agreementMap[agreement.type] || agreement.type.replace(/-/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
 };
 
+// Helper function to render text with bullet points and formatting
+const renderFormattedContent = (html: string): string => {
+  if (!html) return "";
+  
+  // First, decode any HTML entities and clean up the content
+  const content = html;
+  
+  // Check if content has bullet points
+  if (/[●•◦▪◾○]/.test(content) || /(?:^|\n)\s*[-*]\s+/.test(content)) {
+    // Split by common section headers
+    const sections = content.split(/(?=(?:Responsibilities|Requirements|Qualifications|Benefits|About|What you|Who you|Your role|Key|Main|Primary|Essential|Preferred|Nice to have)[^:]*:)/gi);
+    
+    let result = "";
+    
+    for (const section of sections) {
+      // Check if this section starts with a header
+      const headerMatch = section.match(/^((?:Responsibilities|Requirements|Qualifications|Benefits|About|What you|Who you|Your role|Key|Main|Primary|Essential|Preferred|Nice to have)[^:]*:)/i);
+      
+      if (headerMatch) {
+        const header = headerMatch[1];
+        const restOfSection = section.slice(header.length);
+        
+        // Add the header as a strong element
+        result += `<p><strong>${header}</strong></p>`;
+        
+        // Process bullet points in this section
+        const bulletItems = restOfSection.split(/\s*(?:●|•|◦|▪|◾|○)\s+/).filter(item => item.trim());
+        
+        if (bulletItems.length > 0) {
+          result += "<ul>";
+          for (const item of bulletItems) {
+            const cleanItem = item.trim();
+            if (cleanItem) {
+              result += `<li>${cleanItem}</li>`;
+            }
+          }
+          result += "</ul>";
+        }
+      } else {
+        // Check if section has bullet points
+        const bulletItems = section.split(/\s*(?:●|•|◦|▪|◾|○)\s+/).filter(item => item.trim());
+        
+        if (bulletItems.length > 1) {
+          // First item might be introductory text
+          const firstItem = bulletItems[0].trim();
+          if (firstItem && !firstItem.match(/^[A-Z]/)) {
+            result += `<p>${firstItem}</p>`;
+            bulletItems.shift();
+          }
+          
+          result += "<ul>";
+          for (const item of bulletItems) {
+            const cleanItem = item.trim();
+            if (cleanItem) {
+              result += `<li>${cleanItem}</li>`;
+            }
+          }
+          result += "</ul>";
+        } else {
+          // No bullets, just add as paragraph
+          const trimmed = section.trim();
+          if (trimmed) {
+            result += `<p>${trimmed}</p>`;
+          }
+        }
+      }
+    }
+    
+    return result;
+  }
+  
+  // If no bullet patterns found, return as-is
+  return content;
+};
+
 const getThemeColor = (theme: string): string => {
   const themeMap: Record<string, string> = {
     "deepPurple300": "#9575cd",
@@ -133,30 +215,11 @@ interface FitAnalysisDialogProps {
   themeColor: string;
 }
 
-interface AIAnalysis {
-  jobSummary: string | unknown;
-  fitAnalysis: string | unknown;
-}
-
-// Helper function to safely render text content
-const renderTextContent = (content: unknown): string => {
-  if (typeof content === "string") {
-    return content;
-  }
-  if (Array.isArray(content)) {
-    return content.map(item => typeof item === "string" ? item : JSON.stringify(item)).join("\n\n");
-  }
-  if (typeof content === "object" && content !== null) {
-    return JSON.stringify(content, null, 2);
-  }
-  return String(content);
-};
-
 function FitAnalysisDialog({ isOpen, onClose, job, themeColor }: FitAnalysisDialogProps) {
   const [username, setUsername] = useState("");
   const [step, setStep] = useState<"input" | "loading" | "result">("input");
   const [genome, setGenome] = useState<GenomeResponse | null>(null);
-  const [analysis, setAnalysis] = useState<AIAnalysis | null>(null);
+  const [analysis, setAnalysis] = useState<CandidateFitAnalysisResult | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   const handleAnalyze = async () => {
@@ -170,64 +233,8 @@ function FitAnalysisDialog({ isOpen, onClose, job, themeColor }: FitAnalysisDial
       const genomeData = await getGenome(username.trim());
       setGenome(genomeData);
 
-      // 2. Prepare the prompt for AI
-      const prompt = `
-You are an expert talent acquisition specialist and job seeker advisor. Analyze the following job opportunity and candidate profile to create a comprehensive fit analysis.
-
-## JOB OPPORTUNITY
-
-**Position:** ${job.objective}
-**Company:** ${job.organizations?.[0]?.name || "Not specified"}
-**Type:** ${formatType(job.opportunity)}
-**Status:** ${job.status}
-**Commitment:** ${job.commitment?.code ? formatCommitment(job.commitment) : "Not specified"}
-
-**Tagline:** ${job.tagline}
-
-**Required Skills:**
-${job.strengths?.map(s => `- ${s.name}${s.proficiency ? ` (${formatProficiency(s.proficiency)})` : ""}`).join("\n") || "Not specified"}
-
-**Required Languages:**
-${job.languages?.map(l => `- ${l.language.name} (${formatFluency(l.fluency)})`).join("\n") || "Not specified"}
-
-**Location:** ${job.place?.remote ? "Remote" : job.place?.anywhere ? "Anywhere" : "On-site"}
-
-**Compensation:** ${formatCompensation(job.compensation) || "Not disclosed"}
-
-**Job Description:**
-${job.details?.find(d => d.code === "responsibilities")?.content?.replace(/<[^>]*>/g, " ").substring(0, 2000) || "Not available"}
-
----
-
-## CANDIDATE PROFILE
-
-**Name:** ${genomeData.person.name}
-**Headline:** ${genomeData.person.professionalHeadline}
-**Location:** ${genomeData.person.location?.name || "Not specified"}
-
-**Bio Summary:** ${genomeData.person.summaryOfBio || "Not available"}
-
-**Top Skills:**
-${genomeData.strengths?.slice(0, 15).map(s => `- ${s.name}${s.proficiency ? ` (${s.proficiency})` : ""} - ${s.recommendations} recommendations`).join("\n") || "Not specified"}
-
-**Languages:**
-${genomeData.languages?.map(l => `- ${l.language} (${l.fluency})`).join("\n") || "Not specified"}
-
-**Experience Summary:**
-${genomeData.jobs?.slice(0, 5).map(j => `- ${j.name}${j.organizations?.[0]?.name ? ` at ${j.organizations[0].name}` : ""}`).join("\n") || "Not specified"}
-
-**Education:**
-${genomeData.education?.slice(0, 3).map(e => `- ${e.name}${e.organizations?.[0]?.name ? ` at ${e.organizations[0].name}` : ""}`).join("\n") || "Not specified"}
-
----
-
-Please provide your analysis in the following JSON format:
-{
-  "jobSummary": "A compelling 2-3 paragraph summary of the job opportunity, highlighting key aspects, company culture hints, and what makes this role attractive. Write it as if you're explaining this opportunity to a potential candidate.",
-  "fitAnalysis": "A detailed 3-4 paragraph analysis of how well the candidate fits this role. Include: 1) Matching skills and strengths, 2) Potential gaps or areas for development, 3) An overall fit score (e.g., 'Strong Match', 'Good Match', 'Partial Match', 'Needs Development'), and 4) Specific recommendations for the candidate if they want to pursue this opportunity."
-}
-
-Respond ONLY with the JSON object, no additional text.`;
+      // 2. Generate the prompt using the prompts library
+      const prompt = generateCandidateFitPrompt({ job, genome: genomeData });
 
       // 3. Send to AI for analysis
       const aiResponse = await fetch("/api/ai", {
@@ -235,7 +242,7 @@ Respond ONLY with the JSON object, no additional text.`;
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           prompt,
-          systemPrompt: "You are an expert talent acquisition specialist and career advisor. Always respond with valid JSON only.",
+          systemPrompt: CANDIDATE_FIT_SYSTEM_PROMPT,
         }),
       });
 
@@ -246,22 +253,10 @@ Respond ONLY with the JSON object, no additional text.`;
 
       const aiData = await aiResponse.json();
       
-      // Parse the AI response
-      try {
-        const parsedAnalysis = JSON.parse(aiData.text);
-        setAnalysis(parsedAnalysis);
-        setStep("result");
-      } catch {
-        // Try to extract JSON from the response if it has extra text
-        const jsonMatch = aiData.text.match(/\{[\s\S]*\}/);
-        if (jsonMatch) {
-          const parsedAnalysis = JSON.parse(jsonMatch[0]);
-          setAnalysis(parsedAnalysis);
-          setStep("result");
-        } else {
-          throw new Error("Failed to parse AI response");
-        }
-      }
+      // Parse the AI response using the utility function
+      const parsedAnalysis = parseAIResponse(aiData.text);
+      setAnalysis(parsedAnalysis);
+      setStep("result");
     } catch (err) {
       setError(err instanceof Error ? err.message : "An error occurred");
       setStep("input");
@@ -288,10 +283,10 @@ Respond ONLY with the JSON object, no additional text.`;
       />
       
       {/* Dialog */}
-      <div className="relative z-10 mx-4 max-h-[90vh] w-full max-w-3xl overflow-hidden rounded-3xl border border-[--card-border] bg-[--background] shadow-2xl">
+      <div className="relative z-10 mx-4 max-h-[90vh] w-full max-w-3xl overflow-hidden rounded-3xl border border-[var(--card-border)] bg-[var(--background)] shadow-2xl">
         {/* Header */}
         <div 
-          className="flex items-center justify-between border-b border-[--card-border] px-6 py-4"
+          className="flex items-center justify-between border-b border-[var(--card-border)] px-6 py-4"
           style={{ background: `linear-gradient(to right, ${themeColor}15, transparent)` }}
         >
           <div className="flex items-center gap-3">
@@ -304,13 +299,13 @@ Respond ONLY with the JSON object, no additional text.`;
               </svg>
             </div>
             <div>
-              <h2 className="text-lg font-semibold text-[--foreground]">Candidate Fit Analysis</h2>
-              <p className="text-sm text-[--muted]">AI-powered job matching</p>
+              <h2 className="text-lg font-semibold text-[var(--foreground)]">Candidate Fit Analysis</h2>
+              <p className="text-sm text-[var(--muted)]">AI-powered job matching</p>
             </div>
           </div>
           <button 
             onClick={handleClose}
-            className="rounded-lg p-2 text-[--muted] transition-colors hover:bg-[--card-bg] hover:text-[--foreground]"
+            className="rounded-lg p-2 text-[var(--muted)] transition-colors hover:bg-[var(--card-bg)] hover:text-[var(--foreground)]"
           >
             <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
@@ -323,9 +318,9 @@ Respond ONLY with the JSON object, no additional text.`;
           {/* Input Step */}
           {step === "input" && (
             <div className="space-y-6">
-              <div className="rounded-2xl border border-[--card-border] bg-[--card-bg] p-6">
-                <h3 className="mb-2 text-lg font-semibold text-[--foreground]">Enter Candidate Username</h3>
-                <p className="mb-4 text-sm text-[--muted]">
+              <div className="rounded-2xl border border-[var(--card-border)] bg-[var(--card-bg)] p-6">
+                <h3 className="mb-2 text-lg font-semibold text-[var(--foreground)]">Enter Candidate Username</h3>
+                <p className="mb-4 text-sm text-[var(--muted)]">
                   Enter the Torre username of the candidate you want to analyze for this position.
                 </p>
                 
@@ -346,7 +341,7 @@ Respond ONLY with the JSON object, no additional text.`;
                     value={username}
                     onChange={(e) => setUsername(e.target.value)}
                     onKeyDown={(e) => e.key === "Enter" && handleAnalyze()}
-                    className="flex-1 rounded-xl border border-[--card-border] bg-[--input-bg] px-4 py-3 text-[--foreground] placeholder-[--muted] outline-none transition-colors focus:border-[--accent] focus:ring-1 focus:ring-[--accent]"
+                    className="flex-1 rounded-xl border border-[var(--card-border)] bg-[var(--input-bg)] px-4 py-3 text-[var(--foreground)] placeholder-[var(--muted)] outline-none transition-colors focus:border-[var(--accent)] focus:ring-1 focus:ring-[var(--accent)]"
                     placeholder="e.g., renanpeixotox"
                     autoFocus
                   />
@@ -368,8 +363,8 @@ Respond ONLY with the JSON object, no additional text.`;
               </div>
 
               {/* Job Preview */}
-              <div className="rounded-2xl border border-[--card-border] bg-[--card-bg] p-6">
-                <h4 className="mb-3 text-sm font-medium uppercase tracking-wider text-[--muted]">Analyzing for Position</h4>
+              <div className="rounded-2xl border border-[var(--card-border)] bg-[var(--card-bg)] p-6">
+                <h4 className="mb-3 text-sm font-medium uppercase tracking-wider text-[var(--muted)]">Analyzing for Position</h4>
                 <div className="flex items-start gap-4">
                   {job.organizations?.[0]?.picture ? (
                     <Image 
@@ -388,8 +383,8 @@ Respond ONLY with the JSON object, no additional text.`;
                     </div>
                   )}
                   <div>
-                    <h3 className="font-semibold text-[--foreground]">{job.objective}</h3>
-                    <p className="text-sm text-[--muted]">{job.organizations?.[0]?.name}</p>
+                    <h3 className="font-semibold text-[var(--foreground)]">{job.objective}</h3>
+                    <p className="text-sm text-[var(--muted)]">{job.organizations?.[0]?.name}</p>
                   </div>
                 </div>
               </div>
@@ -403,8 +398,8 @@ Respond ONLY with the JSON object, no additional text.`;
                 className="mb-6 h-16 w-16 animate-spin rounded-full border-4 border-t-transparent"
                 style={{ borderColor: `${themeColor}30`, borderTopColor: themeColor }}
               />
-              <h3 className="mb-2 text-lg font-semibold text-[--foreground]">Analyzing Candidate Fit</h3>
-              <p className="text-center text-[--muted]">
+              <h3 className="mb-2 text-lg font-semibold text-[var(--foreground)]">Analyzing Candidate Fit</h3>
+              <p className="text-center text-[var(--muted)]">
                 Fetching profile data and running AI analysis...<br />
                 This may take a few seconds.
               </p>
@@ -415,7 +410,7 @@ Respond ONLY with the JSON object, no additional text.`;
           {step === "result" && analysis && genome && (
             <div className="space-y-6">
               {/* Candidate Header */}
-              <div className="flex items-center gap-4 rounded-2xl border border-[--card-border] bg-[--card-bg] p-4">
+              <div className="flex items-center gap-4 rounded-2xl border border-[var(--card-border)] bg-[var(--card-bg)] p-4">
                 {genome.person.picture ? (
                   <Image 
                     src={genome.person.picture}
@@ -433,8 +428,8 @@ Respond ONLY with the JSON object, no additional text.`;
                   </div>
                 )}
                 <div className="flex-1">
-                  <h3 className="font-semibold text-[--foreground]">{genome.person.name}</h3>
-                  <p className="text-sm text-[--muted]">{genome.person.professionalHeadline}</p>
+                  <h3 className="font-semibold text-[var(--foreground)]">{genome.person.name}</h3>
+                  <p className="text-sm text-[var(--muted)]">{genome.person.professionalHeadline}</p>
                 </div>
                 <a
                   href={`https://torre.ai/${genome.person.publicId}`}
@@ -448,44 +443,315 @@ Respond ONLY with the JSON object, no additional text.`;
               </div>
 
               {/* Job Summary Section */}
-              <div className="rounded-2xl border border-[--card-border] bg-[--card-bg] p-6">
-                <div className="mb-4 flex items-center gap-3">
-                  <div 
-                    className="flex h-10 w-10 items-center justify-center rounded-xl"
-                    style={{ backgroundColor: `${themeColor}25` }}
-                  >
-                    <svg className="h-5 w-5" style={{ color: themeColor }} fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 13.255A23.931 23.931 0 0112 15c-3.183 0-6.22-.62-9-1.745M16 6V4a2 2 0 00-2-2h-4a2 2 0 00-2 2v2m4 6h.01M5 20h14a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
-                    </svg>
+              {analysis.jobSummary && (
+                <div className="rounded-2xl border border-[var(--card-border)] bg-[var(--card-bg)] p-6">
+                  <div className="mb-4 flex items-center gap-3">
+                    <div 
+                      className="flex h-10 w-10 items-center justify-center rounded-xl"
+                      style={{ backgroundColor: `${themeColor}25` }}
+                    >
+                      <svg className="h-5 w-5" style={{ color: themeColor }} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 13.255A23.931 23.931 0 0112 15c-3.183 0-6.22-.62-9-1.745M16 6V4a2 2 0 00-2-2h-4a2 2 0 00-2 2v2m4 6h.01M5 20h14a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+                      </svg>
+                    </div>
+                    <h3 className="text-xl font-semibold text-[var(--foreground)]">Job Summary</h3>
                   </div>
-                  <h3 className="text-xl font-semibold text-[--foreground]">Job Summary</h3>
+                  <div className="prose prose-invert max-w-none text-[var(--muted)] prose-p:leading-relaxed">
+                    {String(analysis.jobSummary).split("\n\n").map((paragraph, idx) => (
+                      <p key={idx}>{paragraph}</p>
+                    ))}
+                  </div>
                 </div>
-                <div className="prose prose-invert max-w-none text-[--muted] prose-p:leading-relaxed">
-                  {renderTextContent(analysis.jobSummary).split("\n\n").map((paragraph, idx) => (
-                    <p key={idx}>{paragraph}</p>
-                  ))}
+              )}
+
+              {/* Fit Analysis Section */}
+              <div className="rounded-2xl border border-[var(--card-border)] bg-[var(--card-bg)] p-6">
+                <div className="mb-6 flex items-center justify-between">
+                  <div className="flex items-center gap-3">
+                    <div 
+                      className="flex h-10 w-10 items-center justify-center rounded-xl"
+                      style={{ backgroundColor: `${themeColor}25` }}
+                    >
+                      <svg className="h-5 w-5" style={{ color: themeColor }} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
+                      </svg>
+                    </div>
+                    <h3 className="text-xl font-semibold text-[var(--foreground)]">Fit Analysis</h3>
+                  </div>
+                  {/* Overall Fit Score Badge */}
+                  {analysis.overallFitScore && (
+                    <span className={`rounded-full px-4 py-2 text-sm font-bold ${getFitScoreColor(String(analysis.overallFitScore)).bg} ${getFitScoreColor(String(analysis.overallFitScore)).text}`}>
+                      {String(analysis.overallFitScore)}
+                    </span>
+                  )}
+                </div>
+
+                <div className="space-y-6">
+                  {/* Matching Skills */}
+                  {analysis.matchingSkillsAndStrengths && analysis.matchingSkillsAndStrengths.length > 0 && (
+                    <div>
+                      <div className="mb-3 flex items-center gap-2">
+                        <svg className="h-5 w-5 text-green-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                        </svg>
+                        <h4 className="font-semibold text-[var(--foreground)]">Matching Skills & Strengths</h4>
+                      </div>
+                      <ul className="space-y-2 pl-7">
+                        {analysis.matchingSkillsAndStrengths.map((item, idx) => (
+                          <li key={idx} className="flex items-start gap-2 text-[var(--muted)]">
+                            <span className="mt-1.5 h-1.5 w-1.5 flex-shrink-0 rounded-full bg-green-400" />
+                            <span>{item}</span>
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
+
+                  {/* Areas for Development */}
+                  {analysis.areasForDevelopment && analysis.areasForDevelopment.length > 0 && (
+                    <div>
+                      <div className="mb-3 flex items-center gap-2">
+                        <svg className="h-5 w-5 text-yellow-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                        </svg>
+                        <h4 className="font-semibold text-[var(--foreground)]">Areas for Development</h4>
+                      </div>
+                      <ul className="space-y-2 pl-7">
+                        {analysis.areasForDevelopment.map((item, idx) => (
+                          <li key={idx} className="flex items-start gap-2 text-[var(--muted)]">
+                            <span className="mt-1.5 h-1.5 w-1.5 flex-shrink-0 rounded-full bg-yellow-400" />
+                            <span>{item}</span>
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
+
+                  {/* Recommendations */}
+                  {analysis.recommendations && analysis.recommendations.length > 0 && (
+                    <div>
+                      <div className="mb-3 flex items-center gap-2">
+                        <svg className="h-5 w-5 text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" />
+                        </svg>
+                        <h4 className="font-semibold text-[var(--foreground)]">Recommendations</h4>
+                      </div>
+                      <ul className="space-y-2 pl-7">
+                        {analysis.recommendations.map((item, idx) => (
+                          <li key={idx} className="flex items-start gap-2 text-[var(--muted)]">
+                            <span className="mt-1.5 h-1.5 w-1.5 flex-shrink-0 rounded-full bg-blue-400" />
+                            <span>{item}</span>
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
                 </div>
               </div>
 
-              {/* Fit Analysis Section */}
-              <div className="rounded-2xl border border-[--card-border] bg-[--card-bg] p-6">
-                <div className="mb-4 flex items-center gap-3">
-                  <div 
-                    className="flex h-10 w-10 items-center justify-center rounded-xl"
-                    style={{ backgroundColor: `${themeColor}25` }}
-                  >
-                    <svg className="h-5 w-5" style={{ color: themeColor }} fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
-                    </svg>
+              {/* Career Trajectory Section */}
+              {analysis.careerTrajectory && (
+                <div className="rounded-2xl border border-[var(--card-border)] bg-[var(--card-bg)] p-6">
+                  <div className="mb-4 flex items-center gap-3">
+                    <div 
+                      className="flex h-10 w-10 items-center justify-center rounded-xl"
+                      style={{ backgroundColor: `${themeColor}25` }}
+                    >
+                      <svg className="h-5 w-5" style={{ color: themeColor }} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6" />
+                      </svg>
+                    </div>
+                    <h3 className="text-xl font-semibold text-[var(--foreground)]">Career Trajectory & Growth</h3>
                   </div>
-                  <h3 className="text-xl font-semibold text-[--foreground]">Fit Analysis</h3>
+                  
+                  <div className="space-y-4">
+                    {/* Summary */}
+                    {analysis.careerTrajectory.summary && (
+                      <p className="text-[var(--muted)] leading-relaxed">
+                        {analysis.careerTrajectory.summary}
+                      </p>
+                    )}
+
+                    {/* Growth Indicators */}
+                    {analysis.careerTrajectory.growthIndicators && analysis.careerTrajectory.growthIndicators.length > 0 && (
+                      <div>
+                        <div className="mb-3 flex items-center gap-2">
+                          <svg className="h-5 w-5 text-purple-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4M7.835 4.697a3.42 3.42 0 001.946-.806 3.42 3.42 0 014.438 0 3.42 3.42 0 001.946.806 3.42 3.42 0 013.138 3.138 3.42 3.42 0 00.806 1.946 3.42 3.42 0 010 4.438 3.42 3.42 0 00-.806 1.946 3.42 3.42 0 01-3.138 3.138 3.42 3.42 0 00-1.946.806 3.42 3.42 0 01-4.438 0 3.42 3.42 0 00-1.946-.806 3.42 3.42 0 01-3.138-3.138 3.42 3.42 0 00-.806-1.946 3.42 3.42 0 010-4.438 3.42 3.42 0 00.806-1.946 3.42 3.42 0 013.138-3.138z" />
+                          </svg>
+                          <h4 className="font-semibold text-[var(--foreground)]">Growth Indicators</h4>
+                        </div>
+                        <ul className="space-y-2 pl-7">
+                          {analysis.careerTrajectory.growthIndicators.map((item, idx) => (
+                            <li key={idx} className="flex items-start gap-2 text-[var(--muted)]">
+                              <span className="mt-1.5 h-1.5 w-1.5 flex-shrink-0 rounded-full bg-purple-400" />
+                              <span>{item}</span>
+                            </li>
+                          ))}
+                        </ul>
+                      </div>
+                    )}
+
+                    {/* Alignment with Role */}
+                    {analysis.careerTrajectory.alignmentWithRole && (
+                      <div className="rounded-xl bg-purple-500/10 p-4">
+                        <p className="text-sm text-[var(--muted)]">
+                          <span className="font-semibold text-purple-400">Role Alignment: </span>
+                          {analysis.careerTrajectory.alignmentWithRole}
+                        </p>
+                      </div>
+                    )}
+                  </div>
                 </div>
-                <div className="prose prose-invert max-w-none text-[--muted] prose-p:leading-relaxed prose-strong:text-[--foreground]">
-                  {renderTextContent(analysis.fitAnalysis).split("\n\n").map((paragraph, idx) => (
-                    <p key={idx}>{paragraph}</p>
-                  ))}
+              )}
+
+              {/* Location & Work Style Section */}
+              {analysis.locationAndWorkStyle && (
+                <div className="rounded-2xl border border-[var(--card-border)] bg-[var(--card-bg)] p-6">
+                  <div className="mb-4 flex items-center gap-3">
+                    <div 
+                      className="flex h-10 w-10 items-center justify-center rounded-xl"
+                      style={{ backgroundColor: `${themeColor}25` }}
+                    >
+                      <svg className="h-5 w-5" style={{ color: themeColor }} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
+                      </svg>
+                    </div>
+                    <h3 className="text-xl font-semibold text-[var(--foreground)]">Location & Work Style</h3>
+                  </div>
+                  
+                  <div className="grid gap-4 sm:grid-cols-3">
+                    {/* Location Compatibility */}
+                    {analysis.locationAndWorkStyle.locationCompatibility && (
+                      <div className="rounded-xl bg-[var(--input-bg)] p-4">
+                        <div className="mb-2 flex items-center gap-2">
+                          <svg className="h-4 w-4 text-cyan-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3.055 11H5a2 2 0 012 2v1a2 2 0 002 2 2 2 0 012 2v2.945M8 3.935V5.5A2.5 2.5 0 0010.5 8h.5a2 2 0 012 2 2 2 0 104 0 2 2 0 012-2h1.064M15 20.488V18a2 2 0 012-2h3.064M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                          </svg>
+                          <h5 className="text-sm font-semibold text-[var(--foreground)]">Location</h5>
+                        </div>
+                        <p className="text-sm text-[var(--muted)]">{analysis.locationAndWorkStyle.locationCompatibility}</p>
+                      </div>
+                    )}
+
+                    {/* Remote Work */}
+                    {analysis.locationAndWorkStyle.remoteWorkAlignment && (
+                      <div className="rounded-xl bg-[var(--input-bg)] p-4">
+                        <div className="mb-2 flex items-center gap-2">
+                          <svg className="h-4 w-4 text-cyan-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+                          </svg>
+                          <h5 className="text-sm font-semibold text-[var(--foreground)]">Remote Work</h5>
+                        </div>
+                        <p className="text-sm text-[var(--muted)]">{analysis.locationAndWorkStyle.remoteWorkAlignment}</p>
+                      </div>
+                    )}
+
+                    {/* Commitment Level */}
+                    {analysis.locationAndWorkStyle.commitmentLevelMatch && (
+                      <div className="rounded-xl bg-[var(--input-bg)] p-4">
+                        <div className="mb-2 flex items-center gap-2">
+                          <svg className="h-4 w-4 text-cyan-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                          </svg>
+                          <h5 className="text-sm font-semibold text-[var(--foreground)]">Commitment</h5>
+                        </div>
+                        <p className="text-sm text-[var(--muted)]">{analysis.locationAndWorkStyle.commitmentLevelMatch}</p>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Potential Concerns */}
+                  {analysis.locationAndWorkStyle.potentialConcerns && analysis.locationAndWorkStyle.potentialConcerns.length > 0 && (
+                    <div className="mt-4">
+                      <div className="mb-3 flex items-center gap-2">
+                        <svg className="h-5 w-5 text-orange-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                        </svg>
+                        <h4 className="font-semibold text-[var(--foreground)]">Potential Concerns</h4>
+                      </div>
+                      <ul className="space-y-2 pl-7">
+                        {analysis.locationAndWorkStyle.potentialConcerns.map((item, idx) => (
+                          <li key={idx} className="flex items-start gap-2 text-[var(--muted)]">
+                            <span className="mt-1.5 h-1.5 w-1.5 flex-shrink-0 rounded-full bg-orange-400" />
+                            <span>{item}</span>
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
                 </div>
-              </div>
+              )}
+
+              {/* Professional Credibility Section */}
+              {analysis.professionalCredibility && (
+                <div className="rounded-2xl border border-[var(--card-border)] bg-[var(--card-bg)] p-6">
+                  <div className="mb-4 flex items-center gap-3">
+                    <div 
+                      className="flex h-10 w-10 items-center justify-center rounded-xl"
+                      style={{ backgroundColor: `${themeColor}25` }}
+                    >
+                      <svg className="h-5 w-5" style={{ color: themeColor }} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
+                      </svg>
+                    </div>
+                    <h3 className="text-xl font-semibold text-[var(--foreground)]">Professional Credibility</h3>
+                  </div>
+                  
+                  <div className="space-y-4">
+                    {/* Profile Quality */}
+                    {analysis.professionalCredibility.profileQuality && (
+                      <div className="rounded-xl bg-teal-500/10 p-4">
+                        <p className="text-sm text-[var(--muted)]">
+                          <span className="font-semibold text-teal-400">Profile Quality: </span>
+                          {analysis.professionalCredibility.profileQuality}
+                        </p>
+                      </div>
+                    )}
+
+                    {/* Professional Presence */}
+                    {analysis.professionalCredibility.professionalPresence && analysis.professionalCredibility.professionalPresence.length > 0 && (
+                      <div>
+                        <div className="mb-3 flex items-center gap-2">
+                          <svg className="h-5 w-5 text-teal-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 12a9 9 0 01-9 9m9-9a9 9 0 00-9-9m9 9H3m9 9a9 9 0 01-9-9m9 9c1.657 0 3-4.03 3-9s-1.343-9-3-9m0 18c-1.657 0-3-4.03-3-9s1.343-9 3-9m-9 9a9 9 0 019-9" />
+                          </svg>
+                          <h4 className="font-semibold text-[var(--foreground)]">Professional Presence</h4>
+                        </div>
+                        <ul className="space-y-2 pl-7">
+                          {analysis.professionalCredibility.professionalPresence.map((item, idx) => (
+                            <li key={idx} className="flex items-start gap-2 text-[var(--muted)]">
+                              <span className="mt-1.5 h-1.5 w-1.5 flex-shrink-0 rounded-full bg-teal-400" />
+                              <span>{item}</span>
+                            </li>
+                          ))}
+                        </ul>
+                      </div>
+                    )}
+
+                    {/* Credibility Indicators */}
+                    {analysis.professionalCredibility.credibilityIndicators && analysis.professionalCredibility.credibilityIndicators.length > 0 && (
+                      <div>
+                        <div className="mb-3 flex items-center gap-2">
+                          <svg className="h-5 w-5 text-teal-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 3v4M3 5h4M6 17v4m-2-2h4m5-16l2.286 6.857L21 12l-5.714 2.143L13 21l-2.286-6.857L5 12l5.714-2.143L13 3z" />
+                          </svg>
+                          <h4 className="font-semibold text-[var(--foreground)]">Credibility Indicators</h4>
+                        </div>
+                        <ul className="space-y-2 pl-7">
+                          {analysis.professionalCredibility.credibilityIndicators.map((item, idx) => (
+                            <li key={idx} className="flex items-start gap-2 text-[var(--muted)]">
+                              <span className="mt-1.5 h-1.5 w-1.5 flex-shrink-0 rounded-full bg-teal-400" />
+                              <span>{item}</span>
+                            </li>
+                          ))}
+                        </ul>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
 
               {/* Actions */}
               <div className="flex justify-end gap-3">
@@ -496,7 +762,7 @@ Respond ONLY with the JSON object, no additional text.`;
                     setGenome(null);
                     setAnalysis(null);
                   }}
-                  className="rounded-xl border border-[--card-border] bg-[--card-bg] px-6 py-3 font-semibold text-[--foreground] transition-colors hover:bg-[--input-bg]"
+                  className="rounded-xl border border-[var(--card-border)] bg-[var(--card-bg)] px-6 py-3 font-semibold text-[var(--foreground)] transition-colors hover:bg-[var(--input-bg)]"
                 >
                   Analyze Another Candidate
                 </button>
@@ -535,14 +801,14 @@ export default function JobDetailsPage({ params }: { params: Promise<{ id: strin
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-[--background] px-4 py-12 sm:px-6 lg:px-8">
+      <div className="min-h-screen bg-[var(--background)] px-4 py-12 sm:px-6 lg:px-8">
         <div className="mx-auto max-w-4xl">
           <div className="mb-8">
             <div className="h-6 w-32 rounded loading-shimmer mb-4" />
             <div className="h-12 w-3/4 rounded loading-shimmer mb-4" />
             <div className="h-6 w-1/2 rounded loading-shimmer" />
           </div>
-          <div className="rounded-2xl border border-[--card-border] bg-[--card-bg] p-8">
+          <div className="rounded-2xl border border-[var(--card-border)] bg-[var(--card-bg)] p-8">
             <div className="space-y-4">
               <div className="h-6 w-full rounded loading-shimmer" />
               <div className="h-6 w-5/6 rounded loading-shimmer" />
@@ -558,17 +824,17 @@ export default function JobDetailsPage({ params }: { params: Promise<{ id: strin
 
   if (error || !job) {
     return (
-      <div className="min-h-screen bg-[--background] px-4 py-12 sm:px-6 lg:px-8">
+      <div className="min-h-screen bg-[var(--background)] px-4 py-12 sm:px-6 lg:px-8">
         <div className="mx-auto max-w-4xl text-center">
           <div className="rounded-2xl border border-red-500/30 bg-red-950/20 p-12">
             <svg className="mx-auto mb-4 h-16 w-16 text-red-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
             </svg>
             <h2 className="mb-2 text-2xl font-semibold text-red-400">Job Not Found</h2>
-            <p className="mb-6 text-[--muted]">{error || "This job posting may have been removed or is no longer available."}</p>
+            <p className="mb-6 text-[var(--muted)]">{error || "This job posting may have been removed or is no longer available."}</p>
             <Link
               href="/jobs"
-              className="inline-flex items-center gap-2 rounded-xl bg-[--accent] px-6 py-3 font-semibold text-[--background] transition-all hover:bg-[--accent-dark]"
+              className="inline-flex items-center gap-2 rounded-xl bg-[var(--accent)] px-6 py-3 font-semibold text-[var(--background)] transition-all hover:bg-[var(--accent-dark)]"
             >
               <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" />
@@ -588,7 +854,7 @@ export default function JobDetailsPage({ params }: { params: Promise<{ id: strin
   const visibleMembers = job.members?.filter((m) => m.visible) || [];
 
   return (
-    <div className="min-h-screen bg-[--background]">
+    <div className="min-h-screen bg-[var(--background)]">
       {/* Hero Section */}
       <div 
         className="relative overflow-hidden px-4 py-12 sm:px-6 lg:px-8"
@@ -600,7 +866,7 @@ export default function JobDetailsPage({ params }: { params: Promise<{ id: strin
           {/* Back Link */}
           <Link
             href="/jobs"
-            className="mb-6 inline-flex items-center gap-2 text-sm text-[--muted] transition-colors hover:text-[--foreground]"
+            className="mb-6 inline-flex items-center gap-2 text-sm text-[var(--muted)] transition-colors hover:text-[var(--foreground)]"
           >
             <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" />
@@ -627,7 +893,7 @@ export default function JobDetailsPage({ params }: { params: Promise<{ id: strin
               </div>
             )}
             <div>
-              <h2 className="text-lg font-semibold text-[--foreground]">{org?.name || "Unknown Company"}</h2>
+              <h2 className="text-lg font-semibold text-[var(--foreground)]">{org?.name || "Unknown Company"}</h2>
               {org?.websiteUrl && (
                 <a 
                   href={org.websiteUrl}
@@ -659,7 +925,7 @@ export default function JobDetailsPage({ params }: { params: Promise<{ id: strin
                 {job.status.charAt(0).toUpperCase() + job.status.slice(1)}
               </span>
               {job.quickApply && (
-                <span className="rounded-full bg-[--accent] px-3 py-1 text-sm font-bold text-[--background]">
+                <span className="rounded-full bg-[var(--accent)] px-3 py-1 text-sm font-bold text-[var(--background)]">
                   Quick Apply
                 </span>
               )}
@@ -669,66 +935,66 @@ export default function JobDetailsPage({ params }: { params: Promise<{ id: strin
                 </span>
               )}
             </div>
-            <h1 className="text-3xl font-bold tracking-tight text-[--foreground] sm:text-4xl">
+            <h1 className="text-3xl font-bold tracking-tight text-[var(--foreground)] sm:text-4xl">
               {job.objective}
             </h1>
-            <p className="mt-3 text-lg text-[--muted]">{job.tagline}</p>
+            <p className="mt-3 text-lg text-[var(--muted)]">{job.tagline}</p>
           </div>
 
           {/* Key Info Cards */}
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
             {/* Compensation */}
             {compensation && (
-              <div className="rounded-xl border border-[--card-border] bg-[--card-bg] p-4">
-                <div className="mb-1 flex items-center gap-2 text-sm text-[--muted]">
+              <div className="rounded-xl border border-[var(--card-border)] bg-[var(--card-bg)] p-4">
+                <div className="mb-1 flex items-center gap-2 text-sm text-[var(--muted)]">
                   <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
                   </svg>
                   Compensation
                 </div>
-                <p className="font-semibold text-[--foreground]">{compensation}</p>
+                <p className="font-semibold text-[var(--foreground)]">{compensation}</p>
                 {job.compensation?.negotiable && (
-                  <p className="text-xs text-[--muted]">Negotiable</p>
+                  <p className="text-xs text-[var(--muted)]">Negotiable</p>
                 )}
               </div>
             )}
 
             {/* Commitment */}
             {job.commitment && (
-              <div className="rounded-xl border border-[--card-border] bg-[--card-bg] p-4">
-                <div className="mb-1 flex items-center gap-2 text-sm text-[--muted]">
+              <div className="rounded-xl border border-[var(--card-border)] bg-[var(--card-bg)] p-4">
+                <div className="mb-1 flex items-center gap-2 text-sm text-[var(--muted)]">
                   <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
                   </svg>
                   Commitment
                 </div>
-                <p className="font-semibold text-[--foreground]">{formatCommitment(job.commitment)}</p>
+                <p className="font-semibold text-[var(--foreground)]">{formatCommitment(job.commitment)}</p>
               </div>
             )}
 
             {/* Agreement */}
             {job.agreement && (
-              <div className="rounded-xl border border-[--card-border] bg-[--card-bg] p-4">
-                <div className="mb-1 flex items-center gap-2 text-sm text-[--muted]">
+              <div className="rounded-xl border border-[var(--card-border)] bg-[var(--card-bg)] p-4">
+                <div className="mb-1 flex items-center gap-2 text-sm text-[var(--muted)]">
                   <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
                   </svg>
                   Agreement
                 </div>
-                <p className="font-semibold text-[--foreground]">{formatAgreement(job.agreement)}</p>
+                <p className="font-semibold text-[var(--foreground)]">{formatAgreement(job.agreement)}</p>
               </div>
             )}
 
             {/* Deadline */}
             {job.deadline && (
-              <div className="rounded-xl border border-[--card-border] bg-[--card-bg] p-4">
-                <div className="mb-1 flex items-center gap-2 text-sm text-[--muted]">
+              <div className="rounded-xl border border-[var(--card-border)] bg-[var(--card-bg)] p-4">
+                <div className="mb-1 flex items-center gap-2 text-sm text-[var(--muted)]">
                   <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
                   </svg>
                   Apply By
                 </div>
-                <p className="font-semibold text-[--foreground]">{formatDate(job.deadline)}</p>
+                <p className="font-semibold text-[var(--foreground)]">{formatDate(job.deadline)}</p>
               </div>
             )}
           </div>
@@ -743,7 +1009,7 @@ export default function JobDetailsPage({ params }: { params: Promise<{ id: strin
             <div className="lg:col-span-2 space-y-8">
               {/* Video */}
               {job.videoUrl && (
-                <div className="rounded-2xl border border-[--card-border] bg-[--card-bg] overflow-hidden">
+                <div className="rounded-2xl border border-[var(--card-border)] bg-[var(--card-bg)] overflow-hidden">
                   <video 
                     src={job.videoUrl} 
                     controls 
@@ -755,28 +1021,28 @@ export default function JobDetailsPage({ params }: { params: Promise<{ id: strin
 
               {/* Job Description */}
               {responsibilities && (
-                <div className="rounded-2xl border border-[--card-border] bg-[--card-bg] p-6">
-                  <h3 className="mb-4 text-xl font-semibold text-[--foreground]">About This Role</h3>
+                <div className="rounded-2xl border border-[var(--card-border)] bg-[var(--card-bg)] p-6">
+                  <h3 className="mb-4 text-xl font-semibold text-[var(--foreground)]">About This Role</h3>
                   <div 
-                    className="prose prose-invert max-w-none text-[--muted] prose-headings:text-[--foreground] prose-a:text-[--accent] prose-strong:text-[--foreground]"
-                    dangerouslySetInnerHTML={{ __html: responsibilities }}
+                    className="prose prose-invert max-w-none text-[var(--muted)] prose-headings:text-[var(--foreground)] prose-a:text-[var(--accent)] prose-strong:text-[var(--foreground)]"
+                    dangerouslySetInnerHTML={{ __html: renderFormattedContent(responsibilities) }}
                   />
                 </div>
               )}
 
               {/* Required Strengths/Skills */}
               {job.strengths && job.strengths.length > 0 && (
-                <div className="rounded-2xl border border-[--card-border] bg-[--card-bg] p-6">
-                  <h3 className="mb-4 text-xl font-semibold text-[--foreground]">Required Skills</h3>
+                <div className="rounded-2xl border border-[var(--card-border)] bg-[var(--card-bg)] p-6">
+                  <h3 className="mb-4 text-xl font-semibold text-[var(--foreground)]">Required Skills</h3>
                   <div className="flex flex-wrap gap-2">
                     {job.strengths.map((strength) => (
                       <span 
                         key={strength.id}
-                        className="rounded-lg border border-[--card-border] bg-[--input-bg] px-3 py-2 text-sm"
+                        className="rounded-lg border border-[var(--card-border)] bg-[var(--input-bg)] px-3 py-2 text-sm"
                       >
-                        <span className="text-[--foreground]">{strength.name}</span>
+                        <span className="text-[var(--foreground)]">{strength.name}</span>
                         {strength.proficiency && (
-                          <span className="text-[--muted]"> · {formatProficiency(strength.proficiency)}</span>
+                          <span className="text-[var(--muted)]"> · {formatProficiency(strength.proficiency)}</span>
                         )}
                       </span>
                     ))}
@@ -786,8 +1052,8 @@ export default function JobDetailsPage({ params }: { params: Promise<{ id: strin
 
               {/* Languages */}
               {job.languages && job.languages.length > 0 && (
-                <div className="rounded-2xl border border-[--card-border] bg-[--card-bg] p-6">
-                  <h3 className="mb-4 text-xl font-semibold text-[--foreground]">Languages</h3>
+                <div className="rounded-2xl border border-[var(--card-border)] bg-[var(--card-bg)] p-6">
+                  <h3 className="mb-4 text-xl font-semibold text-[var(--foreground)]">Languages</h3>
                   <div className="flex flex-wrap gap-2">
                     {job.languages.map((lang, idx) => (
                       <span 
@@ -835,13 +1101,13 @@ export default function JobDetailsPage({ params }: { params: Promise<{ id: strin
                 <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01" />
                 </svg>
-                Analyze Candidate Fit
+                Analyze Candidate with AI
               </button>
 
               {/* Location */}
               {job.place && (
-                <div className="rounded-2xl border border-[--card-border] bg-[--card-bg] p-6">
-                  <h3 className="mb-4 text-lg font-semibold text-[--foreground]">Location</h3>
+                <div className="rounded-2xl border border-[var(--card-border)] bg-[var(--card-bg)] p-6">
+                  <h3 className="mb-4 text-lg font-semibold text-[var(--foreground)]">Location</h3>
                   <div className="space-y-3">
                     {job.place.anywhere ? (
                       <div className="flex items-center gap-2 text-emerald-400">
@@ -864,13 +1130,13 @@ export default function JobDetailsPage({ params }: { params: Promise<{ id: strin
                         {job.place.location.slice(0, 10).map((loc, idx) => (
                           <span 
                             key={idx}
-                            className="rounded-lg bg-[--input-bg] px-2 py-1 text-sm text-[--muted]"
+                            className="rounded-lg bg-[var(--input-bg)] px-2 py-1 text-sm text-[var(--muted)]"
                           >
                             {loc.id}
                           </span>
                         ))}
                         {job.place.location.length > 10 && (
-                          <span className="rounded-lg bg-[--input-bg] px-2 py-1 text-sm text-[--muted]">
+                          <span className="rounded-lg bg-[var(--input-bg)] px-2 py-1 text-sm text-[var(--muted)]">
                             +{job.place.location.length - 10} more
                           </span>
                         )}
@@ -882,8 +1148,8 @@ export default function JobDetailsPage({ params }: { params: Promise<{ id: strin
 
               {/* Team Members */}
               {visibleMembers.length > 0 && (
-                <div className="rounded-2xl border border-[--card-border] bg-[--card-bg] p-6">
-                  <h3 className="mb-4 text-lg font-semibold text-[--foreground]">Team</h3>
+                <div className="rounded-2xl border border-[var(--card-border)] bg-[var(--card-bg)] p-6">
+                  <h3 className="mb-4 text-lg font-semibold text-[var(--foreground)]">Team</h3>
                   <div className="space-y-4">
                     {visibleMembers.slice(0, 5).map((member) => (
                       <a
@@ -891,7 +1157,7 @@ export default function JobDetailsPage({ params }: { params: Promise<{ id: strin
                         href={`https://torre.ai/${member.person.username}`}
                         target="_blank"
                         rel="noopener noreferrer"
-                        className="flex items-center gap-3 rounded-lg p-2 transition-colors hover:bg-[--input-bg]"
+                        className="flex items-center gap-3 rounded-lg p-2 transition-colors hover:bg-[var(--input-bg)]"
                       >
                         {member.person.pictureThumbnail ? (
                           <Image 
@@ -910,7 +1176,7 @@ export default function JobDetailsPage({ params }: { params: Promise<{ id: strin
                           </div>
                         )}
                         <div className="flex-1 min-w-0">
-                          <p className="truncate font-medium text-[--foreground]">
+                          <p className="truncate font-medium text-[var(--foreground)]">
                             {member.person.name}
                             {member.person.verified && (
                               <svg className="ml-1 inline h-4 w-4 text-blue-400" fill="currentColor" viewBox="0 0 20 20">
@@ -918,7 +1184,7 @@ export default function JobDetailsPage({ params }: { params: Promise<{ id: strin
                               </svg>
                             )}
                           </p>
-                          <p className="truncate text-sm text-[--muted]">{member.person.professionalHeadline}</p>
+                          <p className="truncate text-sm text-[var(--muted)]">{member.person.professionalHeadline}</p>
                         </div>
                         {(member.poster || member.leader) && (
                           <span 
@@ -936,12 +1202,12 @@ export default function JobDetailsPage({ params }: { params: Promise<{ id: strin
 
               {/* About Company */}
               {org?.about && (
-                <div className="rounded-2xl border border-[--card-border] bg-[--card-bg] p-6">
-                  <h3 className="mb-4 text-lg font-semibold text-[--foreground]">About {org.name}</h3>
-                  <p className="text-sm text-[--muted] leading-relaxed">{org.about}</p>
+                <div className="rounded-2xl border border-[var(--card-border)] bg-[var(--card-bg)] p-6">
+                  <h3 className="mb-4 text-lg font-semibold text-[var(--foreground)]">About {org.name}</h3>
+                  <p className="text-sm text-[var(--muted)] leading-relaxed">{org.about}</p>
                   {org.size && (
-                    <p className="mt-3 text-sm text-[--muted]">
-                      <span className="font-medium text-[--foreground]">{org.size}</span> employees
+                    <p className="mt-3 text-sm text-[var(--muted)]">
+                      <span className="font-medium text-[var(--foreground)]">{org.size}</span> employees
                     </p>
                   )}
                 </div>
@@ -949,8 +1215,8 @@ export default function JobDetailsPage({ params }: { params: Promise<{ id: strin
 
               {/* Perks */}
               {org?.perks && org.perks !== "[]" && (
-                <div className="rounded-2xl border border-[--card-border] bg-[--card-bg] p-6">
-                  <h3 className="mb-4 text-lg font-semibold text-[--foreground]">Perks & Benefits</h3>
+                <div className="rounded-2xl border border-[var(--card-border)] bg-[var(--card-bg)] p-6">
+                  <h3 className="mb-4 text-lg font-semibold text-[var(--foreground)]">Perks & Benefits</h3>
                   <div className="flex flex-wrap gap-2">
                     {JSON.parse(org.perks).map((perk: string, idx: number) => (
                       <span 
@@ -965,7 +1231,7 @@ export default function JobDetailsPage({ params }: { params: Promise<{ id: strin
               )}
 
               {/* Posted Date */}
-              <div className="text-center text-sm text-[--muted]">
+              <div className="text-center text-sm text-[var(--muted)]">
                 <p>Posted on {formatDate(job.created)}</p>
               </div>
             </div>
